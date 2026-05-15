@@ -1,0 +1,945 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>ID3 AttritionIQ — Information Gain Engine</title>
+<link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@300;400;500&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --void:    #03050A;
+  --deep:    #060D18;
+  --panel:   #091525;
+  --glass:   rgba(10,30,55,0.85);
+  --border:  rgba(0,220,180,0.15);
+  --border2: rgba(0,220,180,0.35);
+  --teal:    #00DcB4;
+  --teal2:   #00FFCC;
+  --teal3:   rgba(0,220,180,0.12);
+  --ember:   #FF6B35;
+  --ember2:  #FF9A6C;
+  --amber:   #FFB800;
+  --violet:  #7B61FF;
+  --fog:     rgba(180,220,255,0.45);
+  --fog2:    rgba(180,220,255,0.2);
+  --glow-t:  0 0 20px rgba(0,220,180,0.4);
+  --glow-e:  0 0 20px rgba(255,107,53,0.4);
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'IBM Plex Mono', monospace;
+  background: var(--void);
+  color: var(--fog);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ── STARFIELD BG ── */
+body::before {
+  content:'';
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background:
+    radial-gradient(ellipse 120% 60% at 10% 20%, rgba(0,100,80,0.07) 0%, transparent 55%),
+    radial-gradient(ellipse 80% 50% at 90% 80%, rgba(123,97,255,0.06) 0%, transparent 55%),
+    radial-gradient(ellipse 50% 40% at 50% 50%, rgba(0,30,50,0.4) 0%, transparent 70%);
+}
+
+/* ── SCANLINE OVERLAY ── */
+body::after {
+  content:'';
+  position:fixed; inset:0; z-index:0; pointer-events:none;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0,0,0,0.04) 2px, rgba(0,0,0,0.04) 4px
+  );
+}
+
+/* ── HEADER ── */
+header {
+  position:sticky; top:0; z-index:200;
+  background: rgba(3,5,10,0.92);
+  backdrop-filter: blur(24px) saturate(1.4);
+  border-bottom: 1px solid var(--border2);
+  height: 60px;
+  display:flex; align-items:center; justify-content:space-between;
+  padding: 0 2rem;
+}
+
+.logo-wrap { display:flex; align-items:center; gap:14px; }
+.logo-icon {
+  width:34px; height:34px;
+  background: conic-gradient(from 0deg, var(--teal), var(--violet), var(--ember), var(--teal));
+  border-radius:50%;
+  display:flex; align-items:center; justify-content:center;
+  animation: spin-slow 12s linear infinite;
+  box-shadow: var(--glow-t);
+}
+.logo-icon::after {
+  content:''; width:18px; height:18px;
+  background:var(--void); border-radius:50%;
+}
+@keyframes spin-slow { to { transform:rotate(360deg); } }
+
+.logo-text {
+  font-family:'Oxanium',sans-serif;
+  font-size:1.15rem; font-weight:800;
+  letter-spacing:0.08em; color:#fff;
+}
+.logo-text span { color:var(--teal); }
+.logo-sub {
+  font-size:0.52rem; color:var(--fog2);
+  letter-spacing:0.2em; text-transform:uppercase;
+  margin-top:1px;
+}
+
+.header-badge {
+  display:flex; align-items:center; gap:6px;
+  background: rgba(0,220,180,0.08);
+  border:1px solid var(--border2);
+  padding:5px 14px; border-radius:2px;
+  font-size:0.6rem; letter-spacing:0.14em; text-transform:uppercase;
+  color:var(--teal);
+}
+.header-badge .dot {
+  width:6px; height:6px; border-radius:50%;
+  background:var(--teal);
+  box-shadow: var(--glow-t);
+  animation: blink 2s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+
+nav { display:flex; gap:2px; }
+.nb {
+  background:none; border:none;
+  color:var(--fog2); cursor:pointer;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:0.6rem; letter-spacing:0.12em; text-transform:uppercase;
+  padding:8px 16px; transition:all 0.2s;
+  position:relative; border-radius:1px;
+}
+.nb::after {
+  content:''; position:absolute; bottom:0; left:50%; right:50%;
+  height:2px; background:var(--teal);
+  transition:all 0.2s; border-radius:2px;
+}
+.nb:hover { color:var(--fog); }
+.nb.active { color:var(--teal); background:var(--teal3); }
+.nb.active::after { left:12%; right:12%; }
+
+/* ── LAYOUT ── */
+main { position:relative; z-index:1; max-width:1440px; margin:0 auto; padding:2rem; }
+.sec { display:none; animation: fadein 0.35s ease; }
+.sec.active { display:block; }
+@keyframes fadein { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+
+/* ── PAGE TITLE ── */
+.page-title {
+  display:flex; align-items:flex-end; justify-content:space-between;
+  margin-bottom:2rem; padding-bottom:1rem;
+  border-bottom:1px solid var(--border);
+}
+.page-title h1 {
+  font-family:'Oxanium',sans-serif;
+  font-size:clamp(1.8rem,3vw,2.8rem);
+  font-weight:800; letter-spacing:-0.01em;
+  color:#fff; line-height:1;
+}
+.page-title h1 em {
+  font-family:'Crimson Pro',serif;
+  font-style:italic; font-weight:300;
+  color:var(--teal); font-size:1.1em;
+}
+.page-title .algo-chip {
+  font-size:0.62rem; letter-spacing:0.15em; text-transform:uppercase;
+  color:var(--teal); background:var(--teal3);
+  border:1px solid var(--border2); padding:6px 16px;
+  display:flex; align-items:center; gap:8px;
+}
+.algo-chip .tri {
+  width:0; height:0;
+  border-left:6px solid var(--teal);
+  border-top:4px solid transparent;
+  border-bottom:4px solid transparent;
+}
+
+/* ── METRIC STRIP ── */
+.metric-strip {
+  display:grid; grid-template-columns:repeat(5,1fr);
+  gap:1px; background:var(--border);
+  border:1px solid var(--border); margin-bottom:2rem;
+}
+.mcard {
+  background:var(--panel); padding:1.2rem 1rem;
+  display:flex; flex-direction:column; gap:4px;
+  position:relative; overflow:hidden;
+  transition:background 0.2s;
+}
+.mcard:hover { background:rgba(9,21,37,0.95); }
+.mcard::before {
+  content:''; position:absolute; top:0; left:0; right:0;
+  height:2px; background:linear-gradient(90deg, transparent, var(--teal), transparent);
+  opacity:0; transition:opacity 0.3s;
+}
+.mcard:hover::before { opacity:1; }
+.mcard-lbl {
+  font-size:0.56rem; letter-spacing:0.16em; text-transform:uppercase;
+  color:var(--fog2);
+}
+.mcard-val {
+  font-family:'Oxanium',sans-serif;
+  font-size:2rem; font-weight:800; line-height:1;
+  color:#fff; letter-spacing:-0.02em;
+}
+.mcard-sub { font-size:0.56rem; color:var(--fog2); margin-top:2px; }
+.teal  { color:var(--teal)!important; }
+.ember { color:var(--ember)!important; }
+.amber { color:var(--amber)!important; }
+.violet { color:var(--violet)!important; }
+
+/* ── TWO / THREE COL ── */
+.two-col   { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem; }
+.three-col { display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin-bottom:1.5rem; }
+.full      { margin-bottom:1.5rem; }
+
+/* ── GLASS PANEL ── */
+.gpanel {
+  background:var(--glass);
+  border:1px solid var(--border);
+  backdrop-filter:blur(12px);
+  padding:1.4rem;
+  position:relative;
+}
+.gpanel-title {
+  font-size:0.58rem; letter-spacing:0.16em; text-transform:uppercase;
+  color:var(--teal); margin-bottom:1.2rem;
+  display:flex; align-items:center; gap:8px;
+}
+.gpanel-title::before {
+  content:''; width:14px; height:1px; background:var(--teal);
+}
+
+/* ── ENTROPY BAR CHART ── */
+.ebar-row { margin-bottom:10px; }
+.ebar-meta { display:flex; justify-content:space-between; margin-bottom:3px; }
+.ebar-name { font-size:0.7rem; color:var(--fog); }
+.ebar-val  { font-family:'Oxanium',sans-serif; font-size:0.7rem; color:var(--fog2); }
+.ebar-track {
+  height:5px;
+  background:rgba(0,220,180,0.06);
+  border-radius:0; position:relative; overflow:hidden;
+}
+.ebar-fill {
+  height:100%; width:0;
+  transition:width 1.1s cubic-bezier(0.16,1,0.3,1);
+  position:relative;
+}
+.ebar-fill::after {
+  content:''; position:absolute; right:0; top:0; bottom:0;
+  width:4px; background:inherit; filter:brightness(2);
+  box-shadow:0 0 6px currentColor;
+}
+
+/* ── DONUT ── */
+.donut-wrap { display:flex; align-items:center; gap:2rem; }
+.donut-svg-box { position:relative; flex-shrink:0; }
+.donut-svg-box svg { display:block; }
+.donut-inner {
+  position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center;
+}
+.donut-pct {
+  font-family:'Oxanium',sans-serif; font-size:1.9rem;
+  font-weight:800; line-height:1; color:var(--teal);
+  text-shadow:var(--glow-t);
+}
+.donut-lbl { font-size:0.55rem; color:var(--fog2); letter-spacing:0.1em; }
+.legend-row { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+.legend-sq  { width:10px; height:10px; border-radius:1px; flex-shrink:0; }
+.legend-txt { font-size:0.75rem; color:var(--fog2); }
+.legend-n   { margin-left:auto; font-family:'Oxanium',sans-serif; font-size:0.8rem; color:var(--fog); }
+
+/* ── CONFUSION MATRIX ── */
+.cm-wrap { display:grid; grid-template-columns:auto 1fr 1fr; gap:3px; max-width:480px; }
+.cm-h { background:transparent; display:flex; align-items:center; justify-content:center; font-size:0.58rem; letter-spacing:0.1em; text-transform:uppercase; color:var(--fog2); padding:8px 6px; }
+.cm-cell {
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:18px 10px; border:1px solid var(--border); background:var(--panel);
+}
+.cm-cell-n {
+  font-family:'Oxanium',sans-serif; font-size:1.8rem; font-weight:700; line-height:1;
+}
+.cm-cell-d { font-size:0.55rem; letter-spacing:0.08em; margin-top:3px; color:var(--fog2); }
+.cm-tp { border-color:rgba(0,220,180,0.3); }
+.cm-tn { border-color:rgba(123,97,255,0.25); }
+.cm-fp { border-color:rgba(255,107,53,0.25); }
+.cm-fn { border-color:rgba(255,184,0,0.25); }
+
+/* ── ENTROPY FORMULA BOX ── */
+.formula-box {
+  background:rgba(0,0,0,0.4);
+  border:1px solid var(--border2);
+  border-left:3px solid var(--teal);
+  padding:14px 18px; margin:1rem 0;
+  font-family:'IBM Plex Mono',monospace;
+  font-size:0.78rem; color:var(--fog);
+  line-height:1.7;
+}
+.formula-box .eq { color:var(--teal2); font-weight:500; }
+.formula-box .comment { color:var(--fog2); font-size:0.68rem; }
+
+/* ── PREDICT FORM ── */
+.predict-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:1px; background:var(--border); }
+.pfield {
+  background:var(--panel); padding:1rem 1.1rem;
+  display:flex; flex-direction:column; gap:8px;
+}
+.pfield-lbl {
+  font-size:0.56rem; letter-spacing:0.14em; text-transform:uppercase;
+  color:var(--fog2); display:flex; justify-content:space-between;
+}
+.pfield-lbl strong { color:var(--teal); font-weight:600; }
+.pfield select {
+  background:rgba(0,0,0,0.5); border:1px solid var(--border);
+  color:var(--fog); font-family:'IBM Plex Mono',monospace; font-size:0.82rem;
+  padding:8px 10px; outline:none; cursor:pointer;
+  transition:border-color 0.2s; -webkit-appearance:none; appearance:none;
+}
+.pfield select:focus { border-color:var(--teal); }
+input[type=range] {
+  -webkit-appearance:none; appearance:none;
+  width:100%; height:2px; background:var(--border2); outline:none; cursor:pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance:none; width:14px; height:14px;
+  background:var(--teal); cursor:pointer; border-radius:50%;
+  box-shadow:0 0 8px var(--teal);
+}
+.predict-btn {
+  background: linear-gradient(135deg, var(--teal), var(--violet));
+  color:#000; border:none;
+  padding:13px 32px; font-family:'Oxanium',sans-serif;
+  font-size:0.9rem; font-weight:700;
+  cursor:pointer; letter-spacing:0.08em;
+  transition:all 0.2s; display:inline-flex; align-items:center; gap:10px;
+  margin-top:1.5rem; text-transform:uppercase;
+}
+.predict-btn:hover { filter:brightness(1.15); transform:translateY(-1px); box-shadow:var(--glow-t); }
+.predict-btn .arr { font-size:1.1rem; }
+
+/* ── RESULT PANEL ── */
+.result-box { display:none; border:1px solid var(--border); margin-top:1.5rem; }
+.result-box.show { display:grid; grid-template-columns:4px 1fr; animation:fadein 0.3s ease; }
+.result-stripe {}
+.result-body { padding:1.6rem 1.8rem; background:var(--glass); }
+.risk-tag {
+  display:inline-flex; align-items:center; gap:8px;
+  font-size:0.6rem; letter-spacing:0.18em; text-transform:uppercase;
+  padding:5px 14px; border-radius:1px; margin-bottom:0.8rem;
+}
+.risk-tag-low    { background:rgba(0,220,180,0.1); color:var(--teal); border:1px solid rgba(0,220,180,0.3); }
+.risk-tag-medium { background:rgba(255,184,0,0.1); color:var(--amber); border:1px solid rgba(255,184,0,0.3); }
+.risk-tag-high   { background:rgba(255,107,53,0.1); color:var(--ember); border:1px solid rgba(255,107,53,0.3); }
+.result-headline {
+  font-family:'Oxanium',sans-serif;
+  font-size:1.7rem; font-weight:800; color:#fff;
+  letter-spacing:-0.01em; margin-bottom:0.4rem; line-height:1.1;
+}
+.result-sub { font-size:0.78rem; color:var(--fog2); margin-bottom:1.2rem; line-height:1.7; }
+.prob-row { display:flex; align-items:center; gap:14px; margin-bottom:1.4rem; }
+.prob-num {
+  font-family:'Oxanium',sans-serif; font-size:2.6rem;
+  font-weight:800; line-height:1; width:90px; letter-spacing:-0.04em;
+}
+.prob-bar-track { flex:1; height:6px; background:rgba(255,255,255,0.06); }
+.prob-bar-fill  { height:100%; transition:width 0.9s cubic-bezier(0.16,1,0.3,1); }
+.factors-wrap { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:1.2rem; }
+.factor-pill {
+  font-size:0.62rem; padding:5px 12px; letter-spacing:0.06em;
+  background:rgba(255,107,53,0.08); border:1px solid rgba(255,107,53,0.25);
+  color:var(--ember2);
+}
+.no-risk { font-size:0.78rem; color:var(--teal); background:rgba(0,220,180,0.06); border:1px solid var(--border2); padding:10px 14px; }
+
+/* ── DECISION PATH ── */
+.path-title { font-size:0.58rem; letter-spacing:0.16em; text-transform:uppercase; color:var(--fog2); margin-bottom:10px; }
+.path-step {
+  display:flex; align-items:center; gap:10px; margin-bottom:6px;
+  font-size:0.72rem; padding:6px 10px;
+  background:rgba(0,0,0,0.3); border-left:2px solid var(--teal);
+}
+.path-feat { color:var(--teal); min-width:140px; }
+.path-dir  { color:var(--fog2); font-size:0.6rem; }
+.path-ig   { margin-left:auto; color:var(--violet); font-size:0.62rem; }
+
+/* ── DATA TABLE ── */
+.dtable { width:100%; border-collapse:collapse; font-size:0.76rem; }
+.dtable thead th {
+  background:rgba(0,220,180,0.06); color:var(--teal);
+  font-size:0.55rem; letter-spacing:0.14em; text-transform:uppercase;
+  padding:10px 14px; text-align:left; border-bottom:1px solid var(--border2);
+  font-weight:500;
+}
+.dtable tbody td { padding:9px 14px; border-bottom:1px solid var(--border); color:var(--fog); }
+.dtable tbody tr:hover td { background:rgba(0,220,180,0.03); }
+.badge-yes { display:inline-block; background:rgba(255,107,53,0.12); color:var(--ember); border:1px solid rgba(255,107,53,0.3); font-size:0.6rem; padding:2px 10px; letter-spacing:0.08em; }
+.badge-no  { display:inline-block; background:rgba(0,220,180,0.08); color:var(--teal); border:1px solid var(--border2); font-size:0.6rem; padding:2px 10px; letter-spacing:0.08em; }
+
+/* ── LOADING ── */
+.loading { padding:2.5rem; text-align:center; color:var(--fog2); font-size:0.68rem; letter-spacing:0.12em; }
+.loading::before { content:''; display:inline-block; width:14px; height:14px; border:2px solid var(--border2); border-top-color:var(--teal); border-radius:50%; animation:spin 0.8s linear infinite; margin-right:8px; vertical-align:middle; }
+@keyframes spin { to{transform:rotate(360deg)} }
+
+/* ── ID3 TREE NODES ── */
+.tree-level { display:flex; justify-content:center; gap:1rem; margin:8px 0; }
+.tnode {
+  border:1px solid var(--border2); background:var(--panel);
+  padding:9px 12px; text-align:center; min-width:136px;
+  font-size:0.72rem; position:relative;
+}
+.tnode.root { border-color:var(--teal); background:rgba(0,220,180,0.06); }
+.tnode.leaf-yes { border-color:rgba(255,107,53,0.4); background:rgba(255,107,53,0.06); }
+.tnode.leaf-no  { border-color:rgba(0,220,180,0.4); background:rgba(0,220,180,0.05); }
+.tnode .tn-feat { font-size:0.62rem; color:var(--teal); margin-bottom:2px; letter-spacing:0.05em; }
+.tnode .tn-main { font-family:'Oxanium',sans-serif; font-size:0.82rem; font-weight:700; color:#fff; }
+.tnode .tn-gain { font-size:0.56rem; color:var(--violet); margin-top:2px; }
+.tree-conn { display:flex; justify-content:center; font-size:0.6rem; color:var(--fog2); gap:4rem; padding:2px 0; }
+
+/* ── ALGO EXPLAINER CARD ── */
+.algo-cards { display:grid; grid-template-columns:repeat(3,1fr); gap:1rem; margin-bottom:1.5rem; }
+.algo-card {
+  background:var(--glass); border:1px solid var(--border);
+  padding:1.2rem; position:relative; overflow:hidden;
+}
+.algo-card::before {
+  content:''; position:absolute; top:0; left:0; right:0; height:2px;
+}
+.algo-card.c1::before { background:linear-gradient(90deg,var(--teal),transparent); }
+.algo-card.c2::before { background:linear-gradient(90deg,var(--violet),transparent); }
+.algo-card.c3::before { background:linear-gradient(90deg,var(--ember),transparent); }
+.algo-card-num { font-family:'Oxanium',sans-serif; font-size:2.5rem; font-weight:800; line-height:1; margin-bottom:4px; opacity:0.15; position:absolute; top:10px; right:14px; color:#fff; }
+.algo-card-title { font-family:'Oxanium',sans-serif; font-size:0.82rem; font-weight:700; color:#fff; margin-bottom:6px; }
+.algo-card-body  { font-size:0.72rem; color:var(--fog2); line-height:1.65; }
+
+/* ── ENTROPY METER ── */
+.entropy-meter { margin-bottom:1.5rem; }
+.em-label { font-size:0.58rem; letter-spacing:0.14em; text-transform:uppercase; color:var(--fog2); margin-bottom:6px; display:flex; justify-content:space-between; }
+.em-label span { color:var(--teal); font-family:'Oxanium',sans-serif; font-size:0.8rem; }
+.em-track { height:8px; background:rgba(255,255,255,0.05); border-radius:0; overflow:hidden; position:relative; }
+.em-fill  { height:100%; background:linear-gradient(90deg,var(--teal),var(--violet)); border-radius:0; transition:width 1s cubic-bezier(0.16,1,0.3,1); }
+
+/* ── CONFIG TABLE ── */
+.cfg-row { display:flex; border-bottom:1px solid var(--border); padding:9px 0; align-items:center; }
+.cfg-key { font-size:0.66rem; color:var(--fog2); width:200px; flex-shrink:0; letter-spacing:0.06em; }
+.cfg-val { font-family:'Oxanium',sans-serif; font-size:0.88rem; color:#fff; }
+.cfg-badge { display:inline-block; background:var(--teal3); border:1px solid var(--border2); color:var(--teal); font-size:0.6rem; padding:2px 10px; letter-spacing:0.08em; margin-left:8px; }
+
+@media(max-width:1024px){
+  .metric-strip { grid-template-columns:repeat(3,1fr); }
+  .two-col,.three-col,.algo-cards { grid-template-columns:1fr; }
+  .predict-grid { grid-template-columns:repeat(2,1fr); }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo-wrap">
+    <div class="logo-icon"></div>
+    <div>
+      <div class="logo-text">ID3 <span>AttritionIQ</span></div>
+      <div class="logo-sub">Information Gain Engine</div>
+    </div>
+  </div>
+  <nav>
+    <button class="nb active" onclick="nav('overview',this)">Overview</button>
+    <button class="nb" onclick="nav('id3',this)">ID3 Algorithm</button>
+    <button class="nb" onclick="nav('analytics',this)">Analytics</button>
+    <button class="nb" onclick="nav('predict',this)">Predict</button>
+    <button class="nb" onclick="nav('dataset',this)">Dataset</button>
+  </nav>
+  <div class="header-badge"><div class="dot"></div>ID3 Model Active</div>
+</header>
+
+<main>
+
+<!-- ════ OVERVIEW ════ -->
+<section class="sec active" id="overview">
+  <div class="page-title">
+    <div>
+      <div style="font-size:0.58rem;letter-spacing:0.2em;text-transform:uppercase;color:var(--teal);margin-bottom:6px">DMDW Project · Entropy-Based Classification</div>
+      <h1>Employee Attrition via<br><em>Information Gain</em></h1>
+    </div>
+    <div class="algo-chip"><div class="tri"></div>ID3 — Iterative Dichotomiser 3</div>
+  </div>
+
+  <div class="metric-strip">
+    <div class="mcard"><div class="mcard-lbl">Model Accuracy</div><div class="mcard-val teal" id="m-acc">—</div><div class="mcard-sub">On 20% test split</div></div>
+    <div class="mcard"><div class="mcard-lbl">AUC-ROC</div><div class="mcard-val violet" id="m-auc">—</div><div class="mcard-sub">Discriminative power</div></div>
+    <div class="mcard"><div class="mcard-lbl">Attrition Rate</div><div class="mcard-val ember" id="m-rate">—</div><div class="mcard-sub">Dataset prevalence</div></div>
+    <div class="mcard"><div class="mcard-lbl">Dataset Entropy</div><div class="mcard-val amber" id="m-entropy">—</div><div class="mcard-sub">Root node H(S)</div></div>
+    <div class="mcard"><div class="mcard-lbl">Total Employees</div><div class="mcard-val" id="m-total">—</div><div class="mcard-sub">Training records</div></div>
+  </div>
+
+  <div class="two-col">
+    <div class="gpanel">
+      <div class="gpanel-title">Information Gain per Feature</div>
+      <div id="feat-chart"><div class="loading">Computing entropy gains</div></div>
+    </div>
+    <div class="gpanel">
+      <div class="gpanel-title">Retention Distribution</div>
+      <div id="donut-chart"><div class="loading">Loading distribution</div></div>
+    </div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);margin-bottom:1.5rem">
+    <div class="mcard"><div class="mcard-lbl">Precision</div><div class="mcard-val" id="m-prec">—</div></div>
+    <div class="mcard"><div class="mcard-lbl">Recall</div><div class="mcard-val" id="m-recall">—</div></div>
+    <div class="mcard"><div class="mcard-lbl">F1 Score</div><div class="mcard-val" id="m-f1">—</div></div>
+    <div class="mcard"><div class="mcard-lbl">Root Entropy H(S)</div><div class="mcard-val amber" id="m-rootent">—</div></div>
+  </div>
+</section>
+
+<!-- ════ ID3 ALGORITHM ════ -->
+<section class="sec" id="id3">
+  <div class="page-title">
+    <h1>ID3 <em>Algorithm</em></h1>
+    <div class="algo-chip"><div class="tri"></div>Entropy · Information Gain · Recursive Splitting</div>
+  </div>
+
+  <div class="algo-cards">
+    <div class="algo-card c1">
+      <div class="algo-card-num">01</div>
+      <div class="algo-card-title">Shannon Entropy</div>
+      <div class="algo-card-body">Measures the impurity of a node. H(S) = 0 means perfectly pure (all one class). H(S) = 1 means perfectly mixed. ID3 seeks to minimise entropy after each split.</div>
+    </div>
+    <div class="algo-card c2">
+      <div class="algo-card-num">02</div>
+      <div class="algo-card-title">Information Gain</div>
+      <div class="algo-card-body">IG(S,A) = H(S) − weighted entropy of child nodes. ID3 always selects the feature with the highest information gain as the next split — unlike CART which uses Gini impurity.</div>
+    </div>
+    <div class="algo-card c3">
+      <div class="algo-card-num">03</div>
+      <div class="algo-card-title">Recursive Partitioning</div>
+      <div class="algo-card-body">The algorithm recursively splits until nodes are pure, max depth is reached, or minimum samples are not met. Each path from root to leaf is a decision rule.</div>
+    </div>
+  </div>
+
+  <div class="gpanel full">
+    <div class="gpanel-title">Mathematical Foundation</div>
+    <div class="formula-box">
+      <div><span class="eq">H(S) = −Σ p_i · log₂(p_i)</span>  <span class="comment">// Shannon entropy of set S</span></div>
+      <div style="margin-top:6px"><span class="eq">IG(S,A) = H(S) − Σ (|Sv|/|S|) · H(Sv)</span>  <span class="comment">// Information Gain for feature A</span></div>
+      <div style="margin-top:6px"><span class="eq">A* = argmax_A [ IG(S,A) ]</span>  <span class="comment">// Select the best split feature</span></div>
+    </div>
+    <p style="font-size:0.74rem;color:var(--fog2);line-height:1.7;margin-top:0.8rem">
+      Unlike scikit-learn's DecisionTreeClassifier which defaults to Gini Impurity (CART algorithm), this project implements ID3 from scratch using pure Python. Every split is chosen by computing information gain across all features and all numeric threshold candidates (midpoints between consecutive unique values).
+    </p>
+  </div>
+
+  <div class="two-col">
+    <div class="gpanel">
+      <div class="gpanel-title">Entropy Breakdown by Feature</div>
+      <div id="entropy-chart"><div class="loading">Computing</div></div>
+    </div>
+    <div class="gpanel">
+      <div class="gpanel-title">Dataset Entropy State</div>
+      <div id="entropy-state"><div class="loading">Loading</div></div>
+    </div>
+  </div>
+
+  <div class="gpanel full">
+    <div class="gpanel-title">ID3 Tree — Root Decision Logic (Depth 3)</div>
+    <div style="overflow-x:auto;padding:1rem 0">
+      <div class="tree-level">
+        <div class="tnode root">
+          <div class="tn-feat">Root Split</div>
+          <div class="tn-main">Job Satisfaction ≤ 2.5?</div>
+          <div class="tn-gain">Highest IG</div>
+        </div>
+      </div>
+      <div class="tree-conn" style="gap:160px"><span>YES ↙</span><span>↘ NO</span></div>
+      <div class="tree-level">
+        <div class="tnode root">
+          <div class="tn-feat">Depth 2 — Left Branch</div>
+          <div class="tn-main">Overtime ≤ 0.5?</div>
+          <div class="tn-gain">2nd highest IG</div>
+        </div>
+        <div class="tnode root">
+          <div class="tn-feat">Depth 2 — Right Branch</div>
+          <div class="tn-main">Salary Band ≤ 0.5?</div>
+          <div class="tn-gain">Context IG</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:center;gap:28px;font-size:0.6rem;color:var(--fog2);padding:4px 0"><span>Y↙</span><span>↘N</span><span style="margin-left:36px">Y↙</span><span>↘N</span></div>
+      <div class="tree-level">
+        <div class="tnode leaf-no"><div class="tn-feat">Leaf</div><div class="tn-main">✓ Stay</div></div>
+        <div class="tnode leaf-yes"><div class="tn-feat">Depth 3</div><div class="tn-main">WLB ≤ 2.5?</div></div>
+        <div class="tnode leaf-yes"><div class="tn-feat">Leaf</div><div class="tn-main">⚠ Leave</div></div>
+        <div class="tnode leaf-no"><div class="tn-feat">Leaf</div><div class="tn-main">✓ Stay</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gpanel full">
+    <div class="gpanel-title">ID3 vs Decision Tree (CART) — Key Differences</div>
+    <div style="overflow-x:auto">
+      <table class="dtable">
+        <thead><tr><th>Aspect</th><th>ID3 (This Project)</th><th>CART / DecisionTree</th></tr></thead>
+        <tbody>
+          <tr><td>Splitting Criterion</td><td style="color:var(--teal)">Information Gain (Entropy)</td><td>Gini Impurity</td></tr>
+          <tr><td>Algorithm Origin</td><td style="color:var(--teal)">Quinlan, 1986</td><td>Breiman et al., 1984</td></tr>
+          <tr><td>Formula</td><td style="color:var(--teal)">H(S) = −Σ p·log₂(p)</td><td>Gini = 1 − Σ p²</td></tr>
+          <tr><td>Implementation</td><td style="color:var(--teal)">Custom Python (from scratch)</td><td>scikit-learn library</td></tr>
+          <tr><td>Tree Type</td><td style="color:var(--teal)">Binary (threshold splits)</td><td>Binary (threshold splits)</td></tr>
+          <tr><td>Handles Multiclass</td><td style="color:var(--teal)">Yes (entropy generalises)</td><td>Yes (Gini generalises)</td></tr>
+          <tr><td>Computation Cost</td><td style="color:var(--teal)">Slightly higher (log2 vs multiplication)</td><td>Faster (simpler formula)</td></tr>
+          <tr><td>Bias</td><td style="color:var(--teal)">Slightly favors features with more values</td><td>Less biased by cardinality</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════ ANALYTICS ════ -->
+<section class="sec" id="analytics">
+  <div class="page-title">
+    <h1>Analytics <em>Deep-Dive</em></h1>
+    <div class="algo-chip"><div class="tri"></div>Dataset Insights</div>
+  </div>
+
+  <div class="two-col">
+    <div class="gpanel"><div class="gpanel-title">Attrition Rate by Department</div><div id="dept-chart"><div class="loading">Loading</div></div></div>
+    <div class="gpanel"><div class="gpanel-title">Attrition Rate by Salary Band</div><div id="sal-chart"><div class="loading">Loading</div></div></div>
+  </div>
+  <div class="two-col">
+    <div class="gpanel"><div class="gpanel-title">Job Satisfaction vs Attrition</div><div id="sat-chart"><div class="loading">Loading</div></div></div>
+    <div class="gpanel"><div class="gpanel-title">Attrition by Age Group</div><div id="age-chart"><div class="loading">Loading</div></div></div>
+  </div>
+  <div class="gpanel full">
+    <div class="gpanel-title">Confusion Matrix — ID3 Model Evaluation</div>
+    <div id="cm-chart"><div class="loading">Loading</div></div>
+  </div>
+</section>
+
+<!-- ════ PREDICT ════ -->
+<section class="sec" id="predict">
+  <div class="page-title">
+    <h1>Live <em>Prediction</em></h1>
+    <div class="algo-chip"><div class="tri"></div>ID3 Tree Traversal</div>
+  </div>
+  <p style="font-size:0.76rem;color:var(--fog2);margin-bottom:1.4rem;max-width:600px;line-height:1.7">Enter employee attributes below. The ID3 tree will traverse from root to leaf using information gain splits and return an attrition probability, risk level, and the exact decision path taken.</p>
+
+  <div class="predict-grid">
+    <div class="pfield"><div class="pfield-lbl">Department</div><select id="p-dept"><option>Engineering</option><option>Sales</option><option>HR</option><option>Marketing</option><option>Finance</option><option>Operations</option></select></div>
+    <div class="pfield"><div class="pfield-lbl">Salary Band</div><select id="p-sal"><option>Low</option><option selected>Medium</option><option>High</option></select></div>
+    <div class="pfield"><div class="pfield-lbl">Overtime</div><select id="p-ot"><option>No</option><option>Yes</option></select></div>
+    <div class="pfield"><div class="pfield-lbl">Age <strong id="lv-age">32</strong></div><input type="range" id="p-age" min="22" max="60" value="32" oninput="document.getElementById('lv-age').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Years at Company <strong id="lv-yrs">4</strong></div><input type="range" id="p-yrs" min="0" max="30" value="4" oninput="document.getElementById('lv-yrs').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Monthly Income <strong id="lv-inc">$7,000</strong></div><input type="range" id="p-inc" min="2000" max="20000" step="500" value="7000" oninput="document.getElementById('lv-inc').textContent='$'+parseInt(this.value).toLocaleString()"></div>
+    <div class="pfield"><div class="pfield-lbl">Job Satisfaction (1–4) <strong id="lv-js">3</strong></div><input type="range" id="p-js" min="1" max="4" value="3" oninput="document.getElementById('lv-js').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Work-Life Balance (1–4) <strong id="lv-wlb">3</strong></div><input type="range" id="p-wlb" min="1" max="4" value="3" oninput="document.getElementById('lv-wlb').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Projects Handled <strong id="lv-proj">4</strong></div><input type="range" id="p-proj" min="1" max="10" value="4" oninput="document.getElementById('lv-proj').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Training Sessions <strong id="lv-train">2</strong></div><input type="range" id="p-train" min="0" max="6" value="2" oninput="document.getElementById('lv-train').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Distance From Home (km) <strong id="lv-dist">10</strong></div><input type="range" id="p-dist" min="1" max="30" value="10" oninput="document.getElementById('lv-dist').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Yrs Since Promotion <strong id="lv-promo">2</strong></div><input type="range" id="p-promo" min="0" max="15" value="2" oninput="document.getElementById('lv-promo').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Performance Rating (1–4) <strong id="lv-perf">3</strong></div><input type="range" id="p-perf" min="1" max="4" value="3" oninput="document.getElementById('lv-perf').textContent=this.value"></div>
+    <div class="pfield"><div class="pfield-lbl">Relationship Satisfaction (1–4) <strong id="lv-rel">3</strong></div><input type="range" id="p-rel" min="1" max="4" value="3" oninput="document.getElementById('lv-rel').textContent=this.value"></div>
+    <div class="pfield" style="align-items:flex-start;justify-content:center"><div class="pfield-lbl" style="margin-bottom:10px">Run</div><button class="predict-btn" onclick="runPredict()"><span class="arr">▶</span> Predict via ID3</button></div>
+  </div>
+
+  <div class="result-box" id="res-box">
+    <div id="res-stripe" style="background:var(--teal)"></div>
+    <div class="result-body">
+      <div id="res-tag"></div>
+      <div class="result-headline" id="res-head"></div>
+      <div class="result-sub" id="res-sub"></div>
+      <div class="prob-row">
+        <div class="prob-num" id="res-prob"></div>
+        <div style="flex:1">
+          <div style="font-size:0.58rem;letter-spacing:0.12em;text-transform:uppercase;color:var(--fog2);margin-bottom:6px">Attrition Probability</div>
+          <div class="prob-bar-track"><div class="prob-bar-fill" id="res-bar"></div></div>
+        </div>
+      </div>
+      <div id="res-factors"></div>
+      <div id="res-path-wrap" style="margin-top:1rem"></div>
+      <div id="res-leaf" style="margin-top:0.8rem;font-size:0.7rem;color:var(--fog2)"></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ DATASET ════ -->
+<section class="sec" id="dataset">
+  <div class="page-title">
+    <h1>Dataset <em>Sample</em></h1>
+    <div class="algo-chip"><div class="tri"></div>1,000 Records</div>
+  </div>
+  <p style="font-size:0.76rem;color:var(--fog2);margin-bottom:1.2rem;line-height:1.7">10 randomly sampled records from the synthetic employee dataset used to train the ID3 model.</p>
+  <div class="gpanel" style="padding:0;overflow:hidden">
+    <div style="overflow-x:auto">
+      <table class="dtable">
+        <thead id="dt-head"></thead>
+        <tbody id="dt-body"><tr><td colspan="9"><div class="loading">Loading</div></td></tr></tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+const API = 'http://localhost:5000/api';
+let analyticsLoaded = false, id3Loaded = false;
+
+function nav(id, btn) {
+  document.querySelectorAll('.sec').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('.nb').forEach(b => b.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  if (id === 'analytics' && !analyticsLoaded) { loadAnalytics(); analyticsLoaded = true; }
+  if (id === 'id3' && !id3Loaded) { loadID3(); id3Loaded = true; }
+}
+
+// ── BAR CHART ──
+function renderBars(el, data, colorFn) {
+  const max = Math.max(...data.map(d => d.v));
+  el.innerHTML = data.map(d => `
+    <div class="ebar-row">
+      <div class="ebar-meta">
+        <span class="ebar-name">${d.label}</span>
+        <span class="ebar-val">${typeof d.v==='number'&&d.v%1!==0?d.v.toFixed(2):d.v}</span>
+      </div>
+      <div class="ebar-track">
+        <div class="ebar-fill" style="background:${colorFn(d)}" data-w="${(d.v/max*100).toFixed(1)}"></div>
+      </div>
+    </div>`).join('');
+  setTimeout(() => el.querySelectorAll('.ebar-fill').forEach(b => b.style.width = b.dataset.w + '%'), 80);
+}
+
+// ── METRICS ──
+async function loadMetrics() {
+  try {
+    const { metrics: m } = await fetch(`${API}/metrics`).then(r=>r.json());
+    const s = (id,v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+    s('m-acc', m.accuracy+'%'); s('m-auc', m.auc_roc+'%');
+    s('m-rate', m.attrition_rate+'%'); s('m-entropy', m.dataset_entropy);
+    s('m-total', m.total_employees.toLocaleString());
+    s('m-prec', m.precision+'%'); s('m-recall', m.recall+'%');
+    s('m-f1', m.f1+'%'); s('m-rootent', m.root_entropy);
+  } catch(e) { console.error(e); }
+}
+
+// ── FEATURE CHART ──
+async function loadFeatures() {
+  try {
+    const { features } = await fetch(`${API}/feature-importance`).then(r=>r.json());
+    const cols = ['#00DcB4','#00FFCC','#7B61FF','#9E8FFF','#FFB800','#FFD060','#FF6B35','#FF9A6C'];
+    renderBars(document.getElementById('feat-chart'),
+      Object.entries(features).slice(0,8).map(([label,v],i) => ({label,v,c:cols[i]})),
+      d => d.c);
+  } catch(e) {}
+}
+
+// ── DONUT ──
+async function loadDonut() {
+  try {
+    const { metrics: m } = await fetch(`${API}/metrics`).then(r=>r.json());
+    const r = 62, circ = 2*Math.PI*r, offset = circ*(1-m.attrition_rate/100);
+    document.getElementById('donut-chart').innerHTML = `
+      <div class="donut-wrap">
+        <div class="donut-svg-box">
+          <svg width="154" height="154" viewBox="0 0 154 154" style="transform:rotate(-90deg)">
+            <circle cx="77" cy="77" r="${r}" fill="none" stroke="rgba(0,220,180,0.08)" stroke-width="14"/>
+            <circle cx="77" cy="77" r="${r}" fill="none" stroke="url(#dg)" stroke-width="14"
+              stroke-dasharray="${circ}" stroke-dashoffset="${circ}" stroke-linecap="butt"
+              style="transition:stroke-dashoffset 1.1s cubic-bezier(0.16,1,0.3,1)" id="darc"/>
+            <defs><linearGradient id="dg" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#00DcB4"/><stop offset="100%" stop-color="#7B61FF"/>
+            </linearGradient></defs>
+          </svg>
+          <div class="donut-inner">
+            <div class="donut-pct">${m.attrition_rate}%</div>
+            <div class="donut-lbl">attrition</div>
+          </div>
+        </div>
+        <div>
+          <div class="legend-row"><div class="legend-sq" style="background:var(--teal)"></div><span class="legend-txt">Retained</span><span class="legend-n">${m.retention_count.toLocaleString()}</span></div>
+          <div class="legend-row"><div class="legend-sq" style="background:var(--ember)"></div><span class="legend-txt">Attrited</span><span class="legend-n">${m.attrition_count.toLocaleString()}</span></div>
+          <p style="font-size:0.7rem;color:var(--fog2);line-height:1.65;margin-top:1rem;max-width:200px">${m.attrition_rate}% of the 1,000-employee dataset is labelled as Attrition = Yes.</p>
+        </div>
+      </div>`;
+    setTimeout(() => { const a = document.getElementById('darc'); if(a) a.style.strokeDashoffset=offset; }, 100);
+  } catch(e) {}
+}
+
+// ── ID3-SPECIFIC ──
+async function loadID3() {
+  try {
+    const { data, dataset_entropy } = await fetch(`${API}/entropy-breakdown`).then(r=>r.json());
+    // Entropy breakdown bars
+    renderBars(document.getElementById('entropy-chart'),
+      data.slice(0,8).map(d => ({ label: d.feature, v: d.gain })),
+      d => d.v > 0.1 ? 'var(--teal)' : d.v > 0.05 ? 'var(--violet)' : 'var(--fog2)');
+
+    // Entropy state
+    const maxIG = data[0]?.gain || 1;
+    document.getElementById('entropy-state').innerHTML = `
+      <p style="font-size:0.74rem;color:var(--fog2);line-height:1.7;margin-bottom:1rem">
+        The root node entropy H(S) = <strong style="color:var(--teal)">${dataset_entropy.toFixed(4)}</strong> bits.
+        Maximum possible entropy for binary classification is 1.0 (perfectly balanced classes).
+        The ID3 algorithm selects splits that maximally reduce this entropy.
+      </p>
+      <div class="entropy-meter">
+        <div class="em-label">Root Entropy H(S) <span>${dataset_entropy.toFixed(4)} bits</span></div>
+        <div class="em-track"><div class="em-fill" id="ent-fill" style="width:0%"></div></div>
+      </div>
+      ${data.slice(0,6).map(d => `
+        <div class="entropy-meter">
+          <div class="em-label">${d.feature} — IG = ${d.gain.toFixed(4)} <span>${d.gain_pct.toFixed(1)}% of H(S)</span></div>
+          <div class="em-track">
+            <div class="em-fill" style="width:0%;background:linear-gradient(90deg,var(--violet),var(--teal))"
+                 data-w="${(d.gain/maxIG*100).toFixed(1)}"></div>
+          </div>
+        </div>`).join('')}`;
+    setTimeout(() => {
+      const ef = document.getElementById('ent-fill');
+      if(ef) ef.style.width = (dataset_entropy*100).toFixed(1)+'%';
+      document.querySelectorAll('#entropy-state .em-fill[data-w]').forEach(b => b.style.width = b.dataset.w+'%');
+    }, 100);
+  } catch(e) { console.error(e); }
+}
+
+// ── ANALYTICS ──
+async function loadAnalytics() {
+  try {
+    const [d1,d2,d3,d4,d5] = await Promise.all([
+      fetch(`${API}/department-stats`).then(r=>r.json()),
+      fetch(`${API}/salary-stats`).then(r=>r.json()),
+      fetch(`${API}/satisfaction-trend`).then(r=>r.json()),
+      fetch(`${API}/age-distribution`).then(r=>r.json()),
+      fetch(`${API}/confusion-matrix`).then(r=>r.json()),
+    ]);
+    const col = v => v>20?'var(--ember)':v>12?'var(--amber)':'var(--teal)';
+    renderBars(document.getElementById('dept-chart'), d1.data.map(d=>({label:d.Department,v:d.rate})), d=>col(d.v));
+    renderBars(document.getElementById('sal-chart'), d2.data.map(d=>({label:d.SalaryBand+' Band',v:d.rate})), d=>d.label.startsWith('Low')?'var(--ember)':d.label.startsWith('Medium')?'var(--amber)':'var(--teal)');
+    const L={1:'Very Low (1)',2:'Low (2)',3:'Medium (3)',4:'High (4)'};
+    renderBars(document.getElementById('sat-chart'), d3.data.map(d=>({label:L[d.satisfaction],v:d.attrition_rate})), d=>col(d.v));
+    renderBars(document.getElementById('age-chart'), d4.data.map(d=>({label:d.AgeGroup,v:d.rate})), d=>col(d.v));
+
+    const [[tn,fp],[fn,tp]] = d5.data.matrix;
+    document.getElementById('cm-chart').innerHTML = `
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;align-items:flex-start">
+        <div class="cm-wrap">
+          <div class="cm-h"></div><div class="cm-h">Pred: Stay</div><div class="cm-h">Pred: Leave</div>
+          <div class="cm-h" style="writing-mode:vertical-rl;font-size:0.55rem;padding:8px 4px">Actual: Stay</div>
+          <div class="cm-cell cm-tn"><div class="cm-cell-n" style="color:var(--violet)">${tn}</div><div class="cm-cell-d">True Neg</div></div>
+          <div class="cm-cell cm-fp"><div class="cm-cell-n" style="color:var(--ember)">${fp}</div><div class="cm-cell-d">False Pos</div></div>
+          <div class="cm-h" style="writing-mode:vertical-rl;font-size:0.55rem;padding:8px 4px">Actual: Leave</div>
+          <div class="cm-cell cm-fn"><div class="cm-cell-n" style="color:var(--amber)">${fn}</div><div class="cm-cell-d">False Neg</div></div>
+          <div class="cm-cell cm-tp"><div class="cm-cell-n" style="color:var(--teal)">${tp}</div><div class="cm-cell-d">True Pos</div></div>
+        </div>
+        <div style="flex:1;min-width:240px">
+          <div style="font-size:0.74rem;color:var(--fog2);line-height:1.8">
+            <div style="margin-bottom:8px"><span style="color:var(--teal)">■</span> <strong style="color:var(--fog)">True Positive (${tp})</strong> — Correctly predicted Leave</div>
+            <div style="margin-bottom:8px"><span style="color:var(--violet)">■</span> <strong style="color:var(--fog)">True Negative (${tn})</strong> — Correctly predicted Stay</div>
+            <div style="margin-bottom:8px"><span style="color:var(--ember)">■</span> <strong style="color:var(--fog)">False Positive (${fp})</strong> — Wrongly predicted Leave</div>
+            <div><span style="color:var(--amber)">■</span> <strong style="color:var(--fog)">False Negative (${fn})</strong> — Missed actual departure</div>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) { console.error(e); }
+}
+
+// ── DATASET ──
+async function loadDataset() {
+  try {
+    const { data } = await fetch(`${API}/dataset-sample`).then(r=>r.json());
+    if (!data?.length) return;
+    const cols = Object.keys(data[0]);
+    document.getElementById('dt-head').innerHTML = `<tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>`;
+    document.getElementById('dt-body').innerHTML = data.map(row =>
+      `<tr>${cols.map(c => {
+        const v = row[c];
+        if(c==='Attrition') return `<td><span class="badge-${v==='Yes'?'yes':'no'}">${v}</span></td>`;
+        if(c==='MonthlyIncome') return `<td>$${parseInt(v).toLocaleString()}</td>`;
+        return `<td>${v}</td>`;
+      }).join('')}</tr>`).join('');
+  } catch(e) {}
+}
+
+// ── PREDICT ──
+async function runPredict() {
+  const payload = {
+    department: document.getElementById('p-dept').value,
+    salary_band: document.getElementById('p-sal').value,
+    overtime: document.getElementById('p-ot').value,
+    age: document.getElementById('p-age').value,
+    years_at_company: document.getElementById('p-yrs').value,
+    monthly_income: document.getElementById('p-inc').value,
+    job_satisfaction: document.getElementById('p-js').value,
+    work_life_balance: document.getElementById('p-wlb').value,
+    num_projects: document.getElementById('p-proj').value,
+    training_last_year: document.getElementById('p-train').value,
+    distance_from_home: document.getElementById('p-dist').value,
+    years_since_promotion: document.getElementById('p-promo').value,
+    performance_rating: document.getElementById('p-perf').value,
+    relationship_satisfaction: document.getElementById('p-rel').value,
+  };
+  try {
+    const d = await fetch(`${API}/predict`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+    }).then(r=>r.json());
+    if (!d.success) throw new Error(d.error);
+
+    const cfg = {
+      Low:    { stripe:'var(--teal)',   tag:'risk-tag-low',    label:'LOW RISK',              head:'Employee likely to stay.', sub:'Retention signals are strong. Keep up current engagement and growth opportunities.' },
+      Medium: { stripe:'var(--amber)',  tag:'risk-tag-medium', label:'MODERATE RISK',         head:'Attrition risk detected by ID3 tree.', sub:'Several risk factors present. Review compensation, workload, or career progression timeline.' },
+      High:   { stripe:'var(--ember)',  tag:'risk-tag-high',   label:'HIGH RISK — INTERVENE', head:'ID3 predicts this employee may leave.', sub:'Multiple entropy-reducing features point toward attrition. Immediate HR action recommended.' },
+    }[d.risk_level];
+    const barCol = { Low:'var(--teal)', Medium:'var(--amber)', High:'var(--ember)' }[d.risk_level];
+
+    const box = document.getElementById('res-box');
+    box.classList.add('show');
+    document.getElementById('res-stripe').style.background = cfg.stripe;
+    document.getElementById('res-tag').innerHTML = `<div class="risk-tag ${cfg.tag}">${cfg.label}</div>`;
+    document.getElementById('res-head').textContent = cfg.head;
+    document.getElementById('res-sub').textContent = cfg.sub;
+    document.getElementById('res-prob').textContent = d.probability + '%';
+    document.getElementById('res-prob').style.color = cfg.stripe;
+    const bar = document.getElementById('res-bar');
+    bar.style.background = barCol; bar.style.width='0%';
+    setTimeout(() => { bar.style.width = d.probability + '%'; }, 80);
+
+    document.getElementById('res-factors').innerHTML = d.risk_factors.length
+      ? `<div style="font-size:0.58rem;letter-spacing:0.14em;text-transform:uppercase;color:var(--fog2);margin-bottom:8px">Risk Factors</div><div class="factors-wrap">${d.risk_factors.map(f=>`<span class="factor-pill">${f}</span>`).join('')}</div>`
+      : `<div class="no-risk">✓ No significant risk factors detected by ID3 analysis</div>`;
+
+    // Decision path
+    if (d.decision_path?.length) {
+      document.getElementById('res-path-wrap').innerHTML = `
+        <div class="path-title">ID3 Decision Path (root → leaf)</div>
+        ${d.decision_path.map((step,i) => `
+          <div class="path-step">
+            <span class="path-feat">${step.feature}</span>
+            <span class="path-dir">≤ ${step.threshold} → ${step.value} → ${step.direction.toUpperCase()}</span>
+            <span class="path-ig">IG=${step.gain}</span>
+          </div>`).join('')}`;
+    }
+
+    document.getElementById('res-leaf').innerHTML =
+      `Leaf entropy: <span style="color:var(--amber)">${d.leaf_entropy}</span> bits &nbsp;|&nbsp; ` +
+      `Leaf samples: <span style="color:var(--teal)">${d.leaf_samples}</span> &nbsp;|&nbsp; ` +
+      `Class counts: Stay=${d.leaf_counts['0']||0} · Leave=${d.leaf_counts['1']||0}`;
+
+    box.scrollIntoView({behavior:'smooth', block:'nearest'});
+  } catch(e) {
+    alert('Error: ' + e.message + '\n\nMake sure the Python backend is running on port 5000.');
+  }
+}
+
+// Init
+loadMetrics(); loadFeatures(); loadDonut(); loadDataset();
+</script>
+</body>
+</html>
